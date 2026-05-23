@@ -1,0 +1,33 @@
+# Weekly publishing strategy.
+# Categories are processed top to bottom; within each category, files are
+# released in the order they appear (explicit list) or sorted alphabetically (glob).
+# select_next.py picks the first `batch_size` files not yet in published.txt.
+
+batch_size: 20
+site_url: "https://thetitaniumtech.com"
+
+categories:
+  - name: core
+    files:
+      - index.html
+      - about.html
+      - contact.html
+      - services.html
+      - industries.html
+      - locations.html
+      - portfolio.html
+      - pricing.html
+      - offer.html
+      - 404.html
+
+  - name: services
+    glob: "services/*.html"
+
+  - name: industries
+    glob: "industries/*.html"
+
+  - name: country-hubs
+    glob: "locations/*.html"
+
+  - name: country-services
+    glob: "locations/*/*.html"

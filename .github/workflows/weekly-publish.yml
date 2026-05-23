@@ -1,0 +1,81 @@
+name: Weekly publish
+
+on:
+  schedule:
+    # Every Monday at 09:00 UTC. Adjust the cron line to change cadence.
+    - cron: "0 9 * * 1"
+  workflow_dispatch:
+    inputs:
+      batch_size:
+        description: "How many pages to publish this run"
+        required: false
+        default: "20"
+      skip_indexer:
+        description: "Skip submitting to omegaindexer (true/false)"
+        required: false
+        default: "false"
+
+permissions:
+  contents: write       # needed to commit updated published.txt
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Select next batch
+        run: |
+          BATCH_SIZE="${{ github.event.inputs.batch_size || '20' }}"
+          python scripts/select_next.py --batch-size "$BATCH_SIZE"
+
+      - name: Build docs/
+        run: python scripts/build.py
+
+      - name: Commit published.txt update
+        run: |
+          if git diff --quiet publish/published.txt; then
+            echo "No new pages published this run."
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add publish/published.txt publish/last_batch.txt
+          git commit -m "publish: $(wc -l < publish/last_batch.txt | tr -d ' ') new pages"
+          git push
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Submit new URLs to omegaindexer
+        if: ${{ github.event.inputs.skip_indexer != 'true' }}
+        env:
+          OMEGA_API_KEY: ${{ secrets.OMEGA_API_KEY }}
+          OMEGA_ENDPOINT: ${{ secrets.OMEGA_ENDPOINT }}
+        run: python scripts/submit_indexer.py
